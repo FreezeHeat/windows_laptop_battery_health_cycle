@@ -1,5 +1,5 @@
 # -----------------------------------------------------------------------------
-# Battery Manager Script - With ISO 8601 Date Formatting
+# Battery Manager Script - Robust, Locale-Agnostic, and ASCII-Only
 # -----------------------------------------------------------------------------
 
 function Show-HelpText {
@@ -7,9 +7,9 @@ function Show-HelpText {
     Write-Host "Monitoring battery charge to keep it between 40% and 80%." -ForegroundColor Yellow
     Write-Host "Press Ctrl+C to stop the script." -ForegroundColor Red
     Write-Host ""
-    Write-Host "✅ Status Check Interval: 60 seconds" -ForegroundColor Green
-    Write-Host "⬆️ Upper Limit (Disconnect Charger): 80%" -ForegroundColor Green
-    Write-Host "⬇️ Lower Limit (System Shutdown): 40%" -ForegroundColor Green
+    Write-Host "[OK] Status Check Interval: 60 seconds" -ForegroundColor Green
+    Write-Host "[UP] Upper Limit (Disconnect Charger): 80%" -ForegroundColor Green
+    Write-Host "[DOWN] Lower Limit (System Shutdown): 40%" -ForegroundColor Green
     Write-Host ""
 }
 
@@ -25,7 +25,7 @@ try {
     $Voice = New-Object -ComObject Sapi.spvoice
     $Voice.Rate = 0
 } catch {
-    Write-Error "Failed to initialize COM objects (Wscript.Shell or Sapi.spvoice). Check permissions."
+    Write-Error "Failed to initialize COM objects (Wscript.Shell or Sapi.spvoice). Check if SAPI is installed."
     Exit 1
 }
 
@@ -36,7 +36,9 @@ Show-HelpText
 While ($true) {
     # Get current battery and AC status
     try {
+        # Using WMI to get the AC Power status (PowerOnLine)
         $BatteryAC = (Get-WmiObject -Class BatteryStatus -Namespace root\wmi).PowerOnLine
+        # Using WMI to get the estimated charge remaining
         $BatteryCharge = (Get-WmiObject win32_battery).estimatedChargeRemaining
     } catch {
         Write-Warning "Could not retrieve battery status. Retrying in $CheckIntervalSeconds seconds."
@@ -55,10 +57,10 @@ While ($true) {
     $Status = if ($BatteryAC) {"PLUGGED IN (AC)"} else {"UNPLUGGED (Battery)"}
     Write-Host "$StandardDate | Charge: $BatteryCharge% | Status: $Status"
 
-    # Keep the PC active by sending a harmless keystroke
+    # Keep the PC active by sending a harmless keystroke to prevent sleep/lock
     $WShell.SendKeys("a")
 
-    # --- AC Connected Logic (Depletion needed) ---
+    # 1. AC Connected Logic (Depletion needed)
     if ($BatteryAC) {
         if ($BatteryCharge -ge $UpperLimit) {
             $Message = "Take the AC power off the PC so it can deplete the power. Current charge is $BatteryCharge percent."
@@ -71,7 +73,7 @@ While ($true) {
             }
         }
     }
-    # --- AC Disconnected Logic (Charging or Shutdown needed) ---
+    # 2. AC Disconnected Logic (Charging or Shutdown needed)
     else {
         if ($BatteryCharge -le $LowerLimit) {
             # Low Battery Alert and Shutdown
@@ -86,7 +88,7 @@ While ($true) {
                 Start-Sleep -Milliseconds 500
             }
             
-            # Initiate Shutdown
+            # Initiate Shutdown (giving 10 seconds for user to hit Ctrl+C)
             Start-Sleep -Seconds 10
             Stop-Computer -ComputerName localhost -Force
         }
