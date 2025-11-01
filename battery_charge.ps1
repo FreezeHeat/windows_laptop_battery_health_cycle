@@ -1,26 +1,7 @@
 # -----------------------------------------------------------------------------
-# Battery Manager Script - A script to manage laptop battery charge cycles
-# to prolong battery life by staying within a 40%-80% range.
+# Battery Manager Script - With ISO 8601 Date Formatting
 # -----------------------------------------------------------------------------
 
-<#
-.SYNOPSIS
-    Monitors battery charge and provides voice notifications to connect/disconnect
-    AC power or shuts down the system if the charge drops too low.
-
-.DESCRIPTION
-    The script runs in an infinite loop, checking the battery level every 60 seconds.
-    - If plugged in (AC Power is ON) and charge >= 80%: Plays a voice notification 
-      to disconnect the charger.
-    - If unplugged (AC Power is OFF) and charge <= 40%: Plays a voice notification
-      and then initiates a system shutdown.
-    - Also sends a harmless keystroke ('a') every cycle to prevent the system 
-      from going to sleep/locking due to inactivity.
-
-.NOTES
-    Requires the 'Sapi.spvoice' COM object for voice notifications.
-    Needs to run with appropriate permissions to access WMI and perform Stop-Computer.
-#>
 function Show-HelpText {
     Write-Host "--- Battery Manager Script ---" -ForegroundColor Cyan
     Write-Host "Monitoring battery charge to keep it between 40% and 80%." -ForegroundColor Yellow
@@ -39,7 +20,6 @@ $UpperLimit = 80            # Upper limit of battery charge percentage
 $LowerLimit = 40            # Lower limit of battery charge percentage
 
 # --- Initialization ---
-# Create COM objects once outside the loop for efficiency
 try {
     $WShell = New-Object -ComObject "Wscript.Shell"
     $Voice = New-Object -ComObject Sapi.spvoice
@@ -64,9 +44,16 @@ While ($true) {
         continue
     }
 
+    # --- Standardized Locale-Agnostic Date Logging ---
+    $CurrentDate = Get-Date
+
+    # Formatting as YYYY-MM-DD HH:mm:ss using the culture-invariant ISO 8601 standard.
+    # The 'en-US' culture ensures consistent separators (colons for time) for the English output.
+    $StandardDate = $CurrentDate.ToString("yyyy-MM-dd HH:mm:ss", [cultureinfo]::GetCultureInfo("en-US"))
+
     # Log current status
     $Status = if ($BatteryAC) {"PLUGGED IN (AC)"} else {"UNPLUGGED (Battery)"}
-    Write-Host "$(Get-Date -Format 'HH:mm:ss') | Charge: $BatteryCharge% | Status: $Status"
+    Write-Host "$StandardDate | Charge: $BatteryCharge% | Status: $Status"
 
     # Keep the PC active by sending a harmless keystroke
     $WShell.SendKeys("a")
@@ -80,7 +67,7 @@ While ($true) {
             # Repeat the voice notification $NotificationCount times
             1..$NotificationCount | ForEach-Object {
                 $Voice.Speak($Message)
-                Start-Sleep -Milliseconds 500 # Short pause between repeats
+                Start-Sleep -Milliseconds 500
             }
         }
     }
@@ -96,11 +83,11 @@ While ($true) {
             1..$NotificationCount | ForEach-Object {
                 $Voice.Speak($Message1)
                 $Voice.Speak($Message2)
-                Start-Sleep -Milliseconds 500 # Short pause between repeats
+                Start-Sleep -Milliseconds 500
             }
             
             # Initiate Shutdown
-            Start-Sleep -Seconds 10 # Give the user 10 seconds to cancel (Ctrl+C)
+            Start-Sleep -Seconds 10
             Stop-Computer -ComputerName localhost -Force
         }
     }
